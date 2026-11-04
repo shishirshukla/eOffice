@@ -32,6 +32,7 @@ Required stack: Python backend, HTML + JS + Bootstrap frontend, PostgreSQL. User
 16. **GM sanctions.** The Chairman does Control for GM sanctions. The Chairman can both sanction and control.
 17. **FRS written.** The FRS was written for business, IT and developers. The tech stack was simplified for the bank's IT team (see below).
 18. **Repo set up.** The FRS was saved to docs/ and pushed to GitHub (shishirshukla/eOffice) so work can continue from another location.
+19. **DSC signer (4 Nov 2026).** The signer will be built in-house on .NET Framework, because the bank restricts installing extra software. Client PCs run Windows 11 Pro at the bank's minimum build. This replaces the vendor-utility option.
 
 ## Final Control matrix
 
@@ -52,7 +53,12 @@ Required stack: Python backend, HTML + JS + Bootstrap frontend, PostgreSQL. User
 - A scheduled job (cron or Windows Task Scheduler) for email and reminders, instead of Celery/Redis
 - File storage in a server folder or on a NAS, instead of MinIO
 - ReportLab to generate PDFs and pyHanko to sign them incrementally
-- A ready-made vendor DSC signer utility for HYP2003, instead of a custom agent
+- **eOffice Signer, built in-house** on .NET Framework 4.8.1 (C#, one small exe, no third-party libraries). The bank restricts software installs, and .NET Framework 4.8.1 is built into Windows 11, so nothing else needs installing.
+    - It reaches the token through the Windows certificate store, and the HYP2003 driver shows the PIN prompt.
+    - The browser starts it through a custom `eoffice-sign://` link, so no local server or open port is needed.
+    - It talks to the server over HTTPS with a one-time signing ticket and signs only the SHA-256 digest; the PDF stays on the server.
+    - Full specification: FRS section 15.3.
+- Client PCs: Windows 11 Pro (bank minimum build) with Edge or Chrome
 - Django admin plus maker-checker for master data
 - Django login, with LDAP added later if needed
 
@@ -64,7 +70,8 @@ Required stack: Python backend, HTML + JS + Bootstrap frontend, PostgreSQL. User
 - Confirm the reminder and escalation days for each stage
 - Confirm the retention period for signed documents
 - Confirm whether a time-stamping service and LDAP are available
-- Decide: buy a vendor DSC signer utility, or have the IT team build one
+- Confirm the HYP2003 driver registers token certificates in the Windows certificate store
+- Confirm the bank has a code-signing certificate for the eOffice Signer
 
 ## Working notes
 

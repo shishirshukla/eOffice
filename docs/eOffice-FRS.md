@@ -323,7 +323,7 @@ The system is hosted on-premise in the bank's data centre and must meet the bank
 | NFR-02 | Access | Login with user ID and password, with lockout after failed attempts; LDAP / Active Directory login if available |
 | NFR-03 | Authorisation | Role-based access; users see only proposals they are part of, plus management views for their office |
 | NFR-04 | Transport | HTTPS only inside the bank network |
-| NFR-05 | Browsers | Latest Chrome and Edge on Windows desktops where the HYP2003 token driver is installed |
+| NFR-05 | Client PCs | Windows 11 Pro (bank minimum build) with Edge or Chrome, the HYP2003 token driver and the eOffice Signer; no other client software |
 | NFR-06 | Performance | Screens load in under 3 seconds; signing completes in under 10 seconds after the PIN is entered |
 | NFR-07 | Availability | Working hours availability with a standby database server; daily backups, tested restore |
 | NFR-08 | Retention | Signed documents and audit records kept per the bank's record retention policy (to be confirmed) |
@@ -345,7 +345,7 @@ The recommended build is a single Django web application with a PostgreSQL datab
 | File storage | Folder on the app server or a NAS share, backed up daily | MinIO object storage | Uses existing storage and backup |
 | PDF creation | ReportLab (or a Word/HTML template converted to PDF) | WeasyPrint | Easier to install, especially on Windows |
 | PDF signing | pyHanko (Python library) | – | Needed for incremental signing |
-| Token signing on PC | Ready-made DSC signer utility from an Indian vendor, supporting HYP2003 | Custom-built local agent | Vendor supports drivers and browser updates |
+| Token signing on PC | In-house eOffice Signer, a single .NET Framework 4.8.1 Windows app (section 15.3) | Python local agent / vendor utility | .NET Framework 4.8.1 is built into Windows 11, so nothing else needs installing |
 | Admin screens | Django admin, with maker-checker added | Custom-built screens | Most master screens come free |
 | Login | Django login; LDAP later if needed | Mandatory AD integration | Fewer dependencies at go-live |
 
@@ -356,14 +356,32 @@ The recommended build is a single Django web application with a PostgreSQL datab
 - Daily backup of the database and the document folder
 - Separate UAT environment with the same setup
 
-**15.3 How signing works (technical)**
+**15.3 eOffice Signer (in-house DSC signing utility)**
 
-1. The user clicks Sign. The server adds an empty signature field to the latest PDF version and calculates its hash.
-2. The browser passes the hash to the DSC signer utility running on the user's PC.
-3. The utility asks for the token PIN, signs the hash with the HYP2003 token and returns the signature and certificate.
-4. The server checks the certificate belongs to the user and is valid, inserts the signature into the PDF with pyHanko and saves it as a new version.
+The bank restricts software installs on user PCs, so the bank's IT team builds the signer in-house as one small Windows app on .NET Framework 4.8.1. That framework is built into Windows 11, so the only installs are the eOffice Signer and the HYP2003 token driver.
 
-Only the hash goes to the PC, so the document never leaves the server.
+| Item | Decision |
+| --- | --- |
+| Platform | Windows 11 Pro (bank minimum build), 64-bit |
+| Runtime | .NET Framework 4.8.1 (built into Windows 11), C#, no third-party libraries |
+| Form | One small exe (WinForms window for status and certificate choice), signed with the bank's code-signing certificate |
+| Install | One MSI pushed by the bank's software distribution; installs per user, no admin rights needed to run |
+| Token access | Through the Windows certificate store (`CurrentUser\My`), using the HYP2003 driver that is already needed for the token; the driver shows its own PIN prompt |
+| Signing | RSA with SHA-256 (PKCS#1 v1.5) over the digest sent by the server, using `X509Certificate2` and `RSA.SignHash` from the standard .NET libraries |
+| Browser link | A custom URL protocol (`eoffice-sign://`) registered by the installer; the browser opens it, so no local web server or open port is needed on the PC |
+| Server link | HTTPS calls to the eOffice server using a one-time signing ticket that expires after 2 minutes |
+| Updates | The server checks the signer version on each call and asks for an update below the minimum version |
+| Logging | A local log of signing attempts, with no PIN and no document content |
+
+**How signing works (technical)**
+
+1. The user clicks Sign. The server creates a one-time signing ticket, and the browser opens `eoffice-sign://sign?ticket=…`.
+2. The eOffice Signer starts, lists the certificates in the Windows store that the user has registered with eOffice, and sends the chosen certificate to the server.
+3. The server (pyHanko) adds the signature field to the latest PDF version, builds the signed attributes with that certificate, and returns their SHA-256 digest.
+4. The Signer signs the digest with the token's private key. The HYP2003 driver asks for the PIN at this step. The Signer then posts the signature back to the server.
+5. The server checks the certificate belongs to the user and is valid, completes the PDF signature, and saves it as a new version. The browser sees the step complete and refreshes.
+
+Only the digest goes to the PC, so the document never leaves the server, and the PIN never leaves the token driver.
 
 **15.4 Suggested phases**
 
@@ -389,7 +407,8 @@ Only the hash goes to the PC, so the document never leaves the server.
 - [ ] Confirm reminder and escalation days per stage
 - [ ] Confirm record retention period for signed documents
 - [ ] Confirm availability of a time-stamping service and LDAP / Active Directory
-- [ ] Choose the DSC signer utility vendor
+- [ ] Confirm the HYP2003 driver on the bank's Windows 11 image registers token certificates in the Windows certificate store
+- [ ] Confirm the bank has a code-signing certificate for the eOffice Signer
 
 **Glossary**
 
