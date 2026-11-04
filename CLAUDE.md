@@ -85,3 +85,7 @@ Required stack: Python backend, HTML + JS + Bootstrap frontend, PostgreSQL. User
 ## Working notes
 
 - docs/eOffice-FRS.md is the main copy. Update it whenever a business rule changes, and add the decision to the history above.
+
+## Tool usage rules
+
+- When calling `mcp__claude_ai_Claude_Docs__guide`, keep results small: ask for fewer rows, fewer fields or a shorter time range. This tool takes only topic names, so that means requesting only the topics the task needs, one topic per call, and never re-reading a topic already read in the session.
