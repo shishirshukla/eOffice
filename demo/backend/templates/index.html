@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eOffice Signing Demo</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<nav class="navbar bg-dark navbar-dark mb-4">
+  <div class="container"><span class="navbar-brand">eOffice &middot; Signing demo</span>
+    <button class="btn btn-outline-light btn-sm" onclick="resetDemo()">Reset demo</button></div>
+</nav>
+
+<div class="container">
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">{{ state.title }}</h5>
+          <p class="text-muted mb-1">Reference: {{ state.reference }}</p>
+          <p class="mb-0">Current version: <strong>v{{ state.current_version }}</strong>
+            {% if not nxt %}<span class="badge bg-success ms-2">Completed</span>{% endif %}</p>
+        </div>
+      </div>
+
+      {% for s in state.slots %}
+      <div class="card mb-3 {% if nxt and s.no == nxt.no %}border-primary{% endif %}">
+        <div class="card-header d-flex justify-content-between">
+          <span><strong>{{ s.no }}. {{ s.role }}</strong></span>
+          {% if s.status == 'signed' %}<span class="badge bg-success">Signed</span>
+          {% elif nxt and s.no == nxt.no %}<span class="badge bg-primary">Your turn</span>
+          {% else %}<span class="badge bg-secondary">Waiting</span>{% endif %}
+        </div>
+        <div class="card-body">
+          {% if s.status == 'signed' %}
+            <p class="mb-1"><strong>{{ s.action }}</strong> by {{ s.name }}, {{ s.designation }}</p>
+            <p class="mb-1 small text-muted">Certificate: {{ s.cert_subject }} &middot; {{ s.cert_thumbprint[:16] }}&hellip;</p>
+            <p class="mb-1 small text-muted">Signed {{ s.signed_at }} &rarr; v{{ s.version }}</p>
+            <p class="mb-0 small" style="white-space: pre-wrap">{{ s.remarks or '(no remarks)' }}</p>
+          {% elif nxt and s.no == nxt.no %}
+            <form onsubmit="startSigning(event, {{ s.no }})">
+              <div class="row g-2 mb-2">
+                <div class="col-sm-6"><input class="form-control" id="name" placeholder="Your name" required></div>
+                <div class="col-sm-6"><input class="form-control" id="designation" placeholder="Designation" required></div>
+              </div>
+              <select class="form-select mb-2" id="action">
+                <option>{{ s.default_action }}</option><option>Returned</option><option>Rejected</option>
+              </select>
+              <textarea class="form-control mb-1" id="remarks" rows="4" maxlength="{{ max_remarks }}"
+                        placeholder="Remarks (printed in your signature box)"></textarea>
+              <div class="form-text mb-2">Up to {{ max_remarks }} characters. Remarks are locked once you sign.</div>
+              <button class="btn btn-primary" type="submit">Sign with DSC token</button>
+            </form>
+          {% else %}
+            <p class="text-muted mb-0">Waiting for the previous signature.</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+
+      <div class="card mb-3">
+        <div class="card-header">Versions</div>
+        <ul class="list-group list-group-flush">
+          {% for v in range(state.current_version, -1, -1) %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>v{{ v }}{% if v == 0 %} (unsigned){% endif %}</span>
+            <a href="/versions/{{ v }}.pdf">Download</a></li>
+          {% endfor %}
+        </ul>
+        <div class="card-body"><button class="btn btn-outline-secondary btn-sm" onclick="verify()">Verify signatures in latest version</button>
+          <pre id="verifyOut" class="small mt-2 mb-0" style="white-space: pre-wrap"></pre></div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <iframe src="/versions/{{ state.current_version }}.pdf?inline=1#page=2" class="w-100 border rounded bg-white" style="height: 85vh"></iframe>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="waitModal" data-bs-backdrop="static" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-body text-center p-4">
+    <div class="spinner-border text-primary mb-3" id="waitSpinner"></div>
+    <p id="waitText" class="mb-2">Opening eOffice Signer&hellip; Choose your certificate and enter the token PIN.</p>
+    <p class="small text-muted mb-3" id="waitHint">If nothing opens, check that eOffice Signer is installed and allow the browser to open it.</p>
+    <button class="btn btn-outline-secondary btn-sm" id="waitClose" onclick="location.reload()">Close</button>
+  </div></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+async function startSigning(ev, slot) {
+  ev.preventDefault();
+  const body = {
+    name: document.getElementById('name').value,
+    designation: document.getElementById('designation').value,
+    action: document.getElementById('action').value,
+    remarks: document.getElementById('remarks').value,
+  };
+  const res = await fetch(`/slots/${slot}/start`, {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const data = await res.json();
+  if (!res.ok) { alert(data.error); return; }
+  new bootstrap.Modal('#waitModal').show();
+  window.location.href = data.launch_url;   // opens the eOffice Signer
+  poll(data.ticket);
+}
+
+async function poll(ticket) {
+  const res = await fetch(`/tickets/${ticket}/status`);
+  const s = await res.json();
+  const text = document.getElementById('waitText');
+  if (s.status === 'waiting_for_token') text.textContent = 'Certificate received. Enter your token PIN in the PIN window.';
+  if (s.status === 'signed') { text.textContent = 'Signed. Loading the new version…'; setTimeout(() => location.reload(), 800); return; }
+  if (['failed', 'cancelled', 'expired'].includes(s.status)) {
+    document.getElementById('waitSpinner').classList.add('d-none');
+    text.textContent = `Signing ${s.status}. ${s.message || ''}`;
+    return;
+  }
+  setTimeout(() => poll(ticket), 1500);
+}
+
+async function verify() {
+  const res = await fetch('/verify');
+  const data = await res.json();
+  const out = data.signatures.map(s =>
+    `${s.field}: ${s.signer}\n  intact=${s.intact} valid=${s.valid} trusted=${s.trusted} coverage=${s.coverage} changes-after=${s.modification_level}`);
+  document.getElementById('verifyOut').textContent = `Version v${data.version}\n` + (out.join('\n') || 'No signatures yet.');
+}
+
+async function resetDemo() {
+  if (!confirm('Start over with a fresh unsigned document?')) return;
+  await fetch('/reset', {method: 'POST'});
+  location.reload();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  eOffice Signer installer (WiX Toolset v5).
+
+  Per-user install: no admin rights needed, which suits locked-down bank PCs.
+    - Files go to   %LOCALAPPDATA%\Programs\eOfficeSigner
+    - Registers the eoffice-sign:// link under HKCU\Software\Classes,
+      so the browser can start the signer.
+  Can also be pushed silently by the bank's software distribution:
+    msiexec /i eOfficeSigner-0.1.0.msi /qn
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="eOffice Signer"
+           Manufacturer="Bank IT - eOffice"
+           Version="0.1.0"
+           UpgradeCode="6B0C9F4E-3E1A-4C55-9C2B-7E5D2A0B41F3"
+           Scope="perUser"
+           Language="1033">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of eOffice Signer is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- No runtime check: .NET Framework 4.8.1 is part of every Windows 11 build
+         the bank uses (22H2 and later). -->
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsDir" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="eOfficeSigner" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="eOffice Signer">
+      <ComponentGroupRef Id="SignerComponents" />
+    </Feature>
+
+    <ComponentGroup Id="SignerComponents" Directory="INSTALLFOLDER">
+
+      <!-- Per-user components use a registry value as KeyPath (Windows Installer rule). -->
+      <Component Id="SignerExe">
+        <File Id="SignerExeFile" Source="$(var.SignerBin)\eOfficeSigner.exe" KeyPath="no" />
+        <RegistryValue Root="HKCU" Key="Software\eOffice\Signer" Name="InstallPath"
+                       Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsDir" Directory="ProgramsDir" On="uninstall" />
+      </Component>
+
+      <Component Id="SignerConfig">
+        <File Id="SignerConfigFile" Source="$(var.SignerBin)\eOfficeSigner.exe.config" KeyPath="no" />
+        <RegistryValue Root="HKCU" Key="Software\eOffice\Signer" Name="Version"
+                       Type="string" Value="0.1.0" KeyPath="yes" />
+      </Component>
+
+      <!-- eoffice-sign:// link handler -->
+      <Component Id="UrlProtocol">
+        <RegistryKey Root="HKCU" Key="Software\Classes\eoffice-sign">
+          <RegistryValue Type="string" Value="URL:eOffice Signer Protocol" KeyPath="yes" />
+          <RegistryValue Name="URL Protocol" Type="string" Value="" />
+          <RegistryKey Key="DefaultIcon">
+            <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]eOfficeSigner.exe&quot;,0" />
+          </RegistryKey>
+          <RegistryKey Key="shell\open\command">
+            <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]eOfficeSigner.exe&quot; &quot;%1&quot;" />
+          </RegistryKey>
+        </RegistryKey>
+      </Component>
+
+    </ComponentGroup>
+  </Package>
+</Wix>

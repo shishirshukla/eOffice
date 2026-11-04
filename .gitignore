@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Demo runtime data and test keys (never commit private keys)
+demo/backend/data/
+demo/backend/test-certs/
+demo/backend/trust-roots/*
+!demo/backend/trust-roots/README.txt
+
+# .NET / WiX build output
+bin/
+obj/
+*.user
+.vs/
+
+# OS
+.DS_Store

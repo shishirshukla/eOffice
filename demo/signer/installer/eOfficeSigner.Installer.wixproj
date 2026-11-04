@@ -1,0 +1,8 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <!-- Build on Windows:  dotnet build -c Release   (run build.ps1 from the signer folder) -->
+  <PropertyGroup>
+    <OutputName>eOfficeSigner-0.1.0</OutputName>
+    <SignerBin>$(MSBuildThisFileDirectory)..\eOfficeSigner\bin\$(Configuration)\net481</SignerBin>
+    <DefineConstants>SignerBin=$(SignerBin)</DefineConstants>
+  </PropertyGroup>
+</Project>

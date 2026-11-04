@@ -33,6 +33,15 @@ Required stack: Python backend, HTML + JS + Bootstrap frontend, PostgreSQL. User
 17. **FRS written.** The FRS was written for business, IT and developers. The tech stack was simplified for the bank's IT team (see below).
 18. **Repo set up.** The FRS was saved to docs/ and pushed to GitHub (shishirshukla/eOffice) so work can continue from another location.
 19. **DSC signer (4 Nov 2026).** The signer will be built in-house on .NET Framework, because the bank restricts installing extra software. Client PCs run Windows 11 Pro at the bank's minimum build. This replaces the vendor-utility option.
+20. **Signing demo (4 Nov 2026).** Before full development, a signing demo was built in [demo/](demo/README.md):
+    - **Backend:** Flask + pyHanko, with a demo PDF of 3 signature slots and remarks printed in each signature stamp.
+    - **Signer:** eOffice Signer in C# on .NET Framework 4.8.1. It finds the token certificate in the Windows certificate store, is started by an `eoffice-sign://` link, and has a per-user WiX v5 MSI.
+    - **Tested on the Mac:**
+        - the backend end to end, with a simulated signer and test certificates
+        - failure cases: wrong key, reused ticket, old signer version, a 4th signature
+        - all 3 signatures intact and valid, with the PDF page rendered and checked
+        - the signer compiles with no errors or warnings
+    - **Not yet tested (needs Windows):** building the MSI, and signing with a real HYP2003 token.
 
 ## Final Control matrix
 
